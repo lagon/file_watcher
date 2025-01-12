@@ -72,13 +72,8 @@ def list_and_process_directory(dir_path: str, base_path: str, input_queue: q.Que
     print(f"Working on {dir_path}")
     file_list = os.listdir(dir_path)
 
-    orig_file_list_length = len(file_list)
-    old_list = file_list.copy()
     for exc in excludes:
-        file_list = list(filter(lambda f: exc.search(f) is None, file_list))
-
-    if orig_file_list_length != len(file_list):
-        print("Ted!")
+        file_list = list(filter(lambda f: exc.search(f, re.IGNORECASE) is None, file_list))
 
     files_in_dir = list(filter(lambda fn: os.path.isfile(os.path.join(dir_path, fn)) , file_list))
     subdir_in_dir = list(filter(lambda fn: os.path.isdir(os.path.join(dir_path, fn)) , file_list))
@@ -86,7 +81,7 @@ def list_and_process_directory(dir_path: str, base_path: str, input_queue: q.Que
     for fname in files_in_dir:
         fpath_name_in_db = _strip_base_path(os.path.join(dir_path, fname), base_path)
 
-        if filedb.does_file_exist(os.path.join(dir_path, fname)):
+        if filedb.does_file_exist(fpath_name_in_db):
             print(f"{fname} already processed")
             continue
         while input_queue.qsize() > 10000:
@@ -149,7 +144,7 @@ def main():
     else:
         filedb.write_start_metadata(dir_base=args.in_dir, start_time=datetime.datetime.now(), excludes=args.exclude)
 
-    exclude_regex = [re.compile(exc) for exc in args.exclude]
+    exclude_regex = [re.compile(exc, re.IGNORECASE) for exc in args.exclude]
     worker_threads = []
     for idx in range(args.num_workers):
         print(f"Starting thread {idx}")
@@ -161,7 +156,7 @@ def main():
     writer_thread.daemon = False
     writer_thread.start()
 
-    list_and_process_directory(dir_path=args.in_dir, base_path=args.in_path, input_queue=input_queue, filedb=filedb, excludes=exclude_regex)
+    list_and_process_directory(dir_path=args.in_dir, base_path=args.in_dir, input_queue=input_queue, filedb=filedb, excludes=exclude_regex)
     print("All done, just waiting for workers to finish")
     for thr in worker_threads:
         input_queue.put(FileFingerprintRequest(requested_filename="", last_request=True))
