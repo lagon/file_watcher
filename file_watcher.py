@@ -71,15 +71,16 @@ def _strip_base_path(path: str, base_path: str) -> str:
 def list_and_process_directory(dir_path: str, base_path: str, input_queue: q.Queue, filedb: sqw.FileDBWrapper, excludes: t.List[re.Pattern]) -> None:
     print(f"Working on {dir_path}")
     file_list = os.listdir(dir_path)
+    file_list = [os.path.join(dir_path, fn) for fn in file_list]
 
     for exc in excludes:
-        file_list = list(filter(lambda f: exc.search(f, re.IGNORECASE) is None, file_list))
+        file_list = list(filter(lambda f: re.search(exc, f) is None, file_list))
 
-    files_in_dir = list(filter(lambda fn: os.path.isfile(os.path.join(dir_path, fn)) , file_list))
-    subdir_in_dir = list(filter(lambda fn: os.path.isdir(os.path.join(dir_path, fn)) , file_list))
+    files_in_dir = list(filter(lambda fn: os.path.isfile(fn) , file_list))
+    subdir_in_dir = list(filter(lambda fn: os.path.isdir(fn) , file_list))
 
     for fname in files_in_dir:
-        fpath_name_in_db = _strip_base_path(os.path.join(dir_path, fname), base_path)
+        fpath_name_in_db = _strip_base_path(fname, base_path)
 
         if filedb.does_file_exist(fpath_name_in_db):
             print(f"{fname} already processed")
@@ -88,12 +89,12 @@ def list_and_process_directory(dir_path: str, base_path: str, input_queue: q.Que
             print(f"Queue is too long {input_queue.qsize()} > 10000, sleeping for a second...")
             time.sleep(1)
         input_queue.put(FileFingerprintRequest(
-            requested_filename=os.path.join(dir_path, fname),
+            requested_filename=fname,
             last_request=False
         ))
 
     for dirname in subdir_in_dir:
-        list_and_process_directory(dir_path=os.path.join(dir_path, dirname), base_path=base_path, input_queue=input_queue, filedb=filedb, excludes=excludes)
+        list_and_process_directory(dir_path=dirname, base_path=base_path, input_queue=input_queue, filedb=filedb, excludes=excludes)
 
     return
 
